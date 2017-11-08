@@ -30,6 +30,8 @@
 #ifndef _REDIS_FMACRO_H
 #define _REDIS_FMACRO_H
 
+#include "lqe.h"
+
 #define _BSD_SOURCE
 
 #if defined(__linux__)

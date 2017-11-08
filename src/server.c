@@ -2312,6 +2312,7 @@ int processCommand(client *c) {
     /* Now lookup the command and check ASAP about trivial error conditions
      * such as wrong arity, bad command name and so forth. */
     c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
+	lqeLog("lookupCommand(%s)", c->argv[0]->ptr);
     if (!c->cmd) {
         flagTransaction(c);
         addReplyErrorFormat(c,"unknown command '%s'",
@@ -2473,9 +2474,14 @@ int processCommand(client *c) {
         c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
         c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
     {
+		// 命令入队
+		lqeLog("[%s]", "queueMultiCommand");
         queueMultiCommand(c);
         addReply(c,shared.queued);
+		// 真正执行命令。
+		// 注意，如果是设置了多命令模式，那么不是直接执行命令，而是让命令入队
     } else {
+		lqeLog("[%s]", "call");
         call(c,CMD_CALL_FULL);
         c->woff = server.master_repl_offset;
         if (listLength(server.ready_keys))
@@ -3805,6 +3811,7 @@ int main(int argc, char **argv) {
     if (background) daemonize();
 
     initServer();
+	lqeLog("%s", "initServer Over");
     if (background || server.pidfile) createPidFile();
     redisSetProcTitle(argv[0]);
     redisAsciiArt();

@@ -79,6 +79,7 @@ client *createClient(int fd) {
         anetEnableTcpNoDelay(NULL,fd);
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
+		// 为接收到的套接字注册监听事件
         if (aeCreateFileEvent(server.el,fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
@@ -611,6 +612,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
         close(fd); /* May be already closed, just ignore errors */
         return;
     }
+	lqeLog("fd[%d] flags[%s] ip[%s] client_addr[%d]", fd, flags, ip, c);
     /* If maxclient directive is set and this is one client more... close the
      * connection. Note that we create the client instead to check before
      * for this condition, since now the socket is already set in non-blocking
@@ -670,6 +672,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
 
     server.stat_numconnections++;
     c->flags |= flags;
+	lqeLog("server.stat_numconnections[%d] client->flags[%d]", server.stat_numconnections, c->flags);
 }
 
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
@@ -678,7 +681,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
-
+	lqeLog("acceptTcpHandler 文件描述[%d] max[%d]", fd, max);
     while(max--) {
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
@@ -1015,7 +1018,7 @@ int handleClientsWithPendingWrites(void) {
 /* resetClient prepare the client to process the next command */
 void resetClient(client *c) {
     redisCommandProc *prevcmd = c->cmd ? c->cmd->proc : NULL;
-
+	lqeLog("%s", "resetClient");
     freeClientArgv(c);
     c->reqtype = 0;
     c->multibulklen = 0;
@@ -1096,6 +1099,7 @@ int processInlineBuffer(client *c) {
         if (sdslen(argv[j])) {
             c->argv[c->argc] = createObject(OBJ_STRING,argv[j]);
             c->argc++;
+			lqeLog("argv[%d] = [%s]", c->argc-1, c->argv[c->argc-1]);
         } else {
             sdsfree(argv[j]);
         }
@@ -1313,6 +1317,7 @@ void processInputBuffer(client *c) {
                 c->reqtype = PROTO_REQ_INLINE;
             }
         }
+		lqeLog("c->reqtype[%d], c->querybuf[%s]", c->reqtype, c->querybuf);
 
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
@@ -1367,11 +1372,13 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         && c->bulklen >= PROTO_MBULK_BIG_ARG)
     {
         int remaining = (unsigned)(c->bulklen+2)-sdslen(c->querybuf);
-
+		lqeLog("remaining[%d] (unsigned)(c->bulklen+2)[%d] sdslen(c->querybuf)[%d]", 
+				remaining, (unsigned)(c->bulklen+2), sdslen(c->querybuf));
+		
         if (remaining < readlen) readlen = remaining;
     }
-
     qblen = sdslen(c->querybuf);
+	lqeLog("c->querybuf[%s] qblen[%d] querybuf_peak[%d]", c->querybuf, qblen, c->querybuf_peak);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
     nread = read(fd, c->querybuf+qblen, readlen);
@@ -1416,11 +1423,14 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * was actually applied to the master state: this quantity, and its
      * corresponding part of the replication stream, will be propagated to
      * the sub-slaves and to the replication backlog. */
+	lqeLog("!(c->flags & CLIENT_MASTER) == [%d]", !(c->flags & CLIENT_MASTER));
     if (!(c->flags & CLIENT_MASTER)) {
         processInputBuffer(c);
+		lqeLog("%s", "processInputBuffer");
     } else {
         size_t prev_offset = c->reploff;
         processInputBuffer(c);
+		lqeLog("%s", "processInputBuffer");
         size_t applied = c->reploff - prev_offset;
         if (applied) {
             replicationFeedSlavesFromMasterStream(server.slaves,

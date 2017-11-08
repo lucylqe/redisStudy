@@ -531,7 +531,9 @@ int anetUnixServer(char *err, char *path, mode_t perm, int backlog)
 static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *len) {
     int fd;
     while(1) {
+		lqeLog("%s","accept begin");
         fd = accept(s,sa,len);
+		lqeLog("fd[%d] errno[%d][%s] EINTR[%d]ANET_ERR[%d]", fd, errno, strerror(errno),  EINTR, ANET_ERR);
         if (fd == -1) {
             if (errno == EINTR)
                 continue;
@@ -561,6 +563,7 @@ int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
         if (ip) inet_ntop(AF_INET6,(void*)&(s->sin6_addr),ip,ip_len);
         if (port) *port = ntohs(s->sin6_port);
     }
+	lqeLog("fd[%d][%s][%d]", fd, ip, *port);
     return fd;
 }
 
